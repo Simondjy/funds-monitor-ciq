@@ -600,10 +600,18 @@ def calculate_sector_contribution(holdings, agix_dtd_return=None):
         # 按行业汇总贡献度
         sector_contribution = holdings.groupby('Sector')[contribution_col].sum()
         
-        # 如果提供了AGIX的DTD收益，则将贡献度乘以DTD收益的绝对值，保持原有符号
+        # 如果提供了AGIX的DTD收益，则标准化贡献度并乘以DTD收益
         if agix_dtd_return is not None and pd.notna(agix_dtd_return):
-            # 使用DTD收益的绝对值来调整贡献度的幅度，但保持原有符号
-            sector_contribution = sector_contribution * abs(agix_dtd_return)
+            # 计算原始贡献度的总和
+            total_contribution = sector_contribution.sum()
+            
+            # 如果总和不为0，则进行标准化
+            if total_contribution != 0:
+                # 标准化贡献度（使总和为1），然后乘以DTD收益
+                sector_contribution = (sector_contribution / total_contribution) * agix_dtd_return
+            else:
+                # 如果总和为0，则直接乘以DTD收益
+                sector_contribution = sector_contribution * agix_dtd_return
         
         # 将贡献度转换为百分比格式（乘以100）
         sector_contribution = sector_contribution * 100
@@ -814,7 +822,8 @@ def main():
             display_raw1 = raw1_data.copy()
             
             # 定义需要以百分比形式显示的列
-            percentage_columns = ['DTD', 'WTD', 'MTD', 'YTD', 'Return since 2024', 'Return since launch']
+            percentage_columns = ['DTD', 'WTD', 'MTD', 'YTD', 'Return since 2024', 'Return since launch', 
+                                'Price Change', 'Return since 2025', 'Annual Return 2023']
             
             # 应用百分比格式化和颜色
             for col in percentage_columns:
@@ -824,7 +833,9 @@ def main():
                     # 转换为百分比格式并添加颜色
                     def format_percentage_with_color(x):
                         if pd.notna(x):
-                            formatted = f"{x:.2f}%"
+                            # 原始数据已经是小数格式，直接转换为百分比
+                            percentage_value = x * 100
+                            formatted = f"{percentage_value:.2f}%"
                             if x > 0:
                                 return f"🟢 {formatted}"  # 绿色表示上涨
                             elif x < 0:
@@ -834,6 +845,26 @@ def main():
                         return ""
                     
                     display_raw1[col] = display_raw1[col].apply(format_percentage_with_color)
+            
+            # 处理资金流量列（显示原始数值并添加红绿颜色）
+            flow_columns = ['Daily Flow', 'YTD Flow', 'Flow since Jan 2023']
+            for col in flow_columns:
+                if col in display_raw1.columns:
+                    # 确保数据是数值类型
+                    display_raw1[col] = pd.to_numeric(display_raw1[col], errors='coerce')
+                    # 转换为原始数值格式并添加颜色
+                    def format_flow_with_color(x):
+                        if pd.notna(x):
+                            formatted = f"{x:.2f}"
+                            if x > 0:
+                                return f"🟢 {formatted}"  # 绿色表示净流入
+                            elif x < 0:
+                                return f"🔴 {formatted}"  # 红色表示净流出
+                            else:
+                                return formatted
+                        return ""
+                    
+                    display_raw1[col] = display_raw1[col].apply(format_flow_with_color)
             
             # 确保所有列都是字符串类型，避免Arrow序列化问题
             for col in display_raw1.columns:
@@ -876,7 +907,7 @@ def main():
                 # 为每个指标创建柱状图
                 for i, metric in enumerate(['DTD', 'WTD', 'YTD', 'Return since 2024']):
                     if metric in filtered_data.columns:
-                        # 获取数值数据（不包含百分比符号）
+                        # 获取数值数据（原始数据已经是小数格式，转换为百分比）
                         values = pd.to_numeric(filtered_data[metric], errors='coerce') * 100  # 转换为百分比
                         
                         # 为每个基金设置颜色，AGIX突出显示
@@ -960,15 +991,70 @@ def main():
                 display_monitor = daily_monitor.copy()
                 numeric_columns = ['Fund Asset(MLN USD)', 'Volume(MLN)', 'Price Change', 'Daily Flow', 
                                   'YTD Flow', 'Flow since Jan 2023', 'Expense Ratio', 'Return since 2024', 
-                                  'Return since 2025', '30D Vol', 'Holdings']
+                                  'Return since 2025', '30D Vol', 'Holdings', 'Annual Return 2023']
                 
                 for col in display_monitor.columns:
                     if col in numeric_columns and display_monitor[col].dtype == 'object':
                         display_monitor[col] = pd.to_numeric(display_monitor[col], errors='coerce')
                 
-                # 确保所有列都是数值或字符串类型，避免Arrow序列化问题
+                # 应用格式化
                 for col in display_monitor.columns:
-                    if display_monitor[col].dtype == 'object':
+                    if col == 'Fund Asset(MLN USD)':
+                        # Fund Asset保留两位小数
+                        display_monitor[col] = display_monitor[col].apply(
+                            lambda x: f"{x:.2f}" if pd.notna(x) else ""
+                        )
+                    elif col == 'Volume(MLN)':
+                        # Volume保留两位小数
+                        display_monitor[col] = display_monitor[col].apply(
+                            lambda x: f"{x:.2f}" if pd.notna(x) else ""
+                        )
+                    elif col in ['Price Change', 'Return since 2024', 'Return since 2025', 'Annual Return 2023']:
+                        # 这些列保留两位小数并显示为百分比格式，添加红绿颜色
+                        def format_percentage_with_color(x):
+                            if pd.notna(x):
+                                percentage_value = x * 100
+                                formatted = f"{percentage_value:.2f}%"
+                                if x > 0:
+                                    return f"🟢 {formatted}"  # 绿色表示上涨
+                                elif x < 0:
+                                    return f"🔴 {formatted}"  # 红色表示下跌
+                                else:
+                                    return formatted
+                            return ""
+                        
+                        display_monitor[col] = display_monitor[col].apply(format_percentage_with_color)
+                    elif col in ['Daily Flow', 'YTD Flow', 'Flow since Jan 2023']:
+                        # 这些列是资金流量数据，显示原始数值并添加红绿颜色
+                        def format_flow_with_color(x):
+                            if pd.notna(x):
+                                formatted = f"{x:.2f}"
+                                if x > 0:
+                                    return f"🟢 {formatted}"  # 绿色表示净流入
+                                elif x < 0:
+                                    return f"🔴 {formatted}"  # 红色表示净流出
+                                else:
+                                    return formatted
+                            return ""
+                        
+                        display_monitor[col] = display_monitor[col].apply(format_flow_with_color)
+                    elif col == 'Expense Ratio':
+                        # Expense Ratio保留两位小数并显示为百分比格式（不添加颜色）
+                        display_monitor[col] = display_monitor[col].apply(
+                            lambda x: f"{x*100:.2f}%" if pd.notna(x) else ""
+                        )
+                    elif col == 'Holdings':
+                        # Holdings列保留整数
+                        display_monitor[col] = display_monitor[col].apply(
+                            lambda x: f"{int(x)}" if pd.notna(x) else ""
+                        )
+                    elif col in numeric_columns:
+                        # 其他数值列保持原样
+                        display_monitor[col] = display_monitor[col].apply(
+                            lambda x: f"{x:.2f}" if pd.notna(x) else ""
+                        )
+                    elif display_monitor[col].dtype == 'object':
+                        # 非数值列转换为字符串
                         display_monitor[col] = display_monitor[col].astype(str)
                 
                 st.dataframe(display_monitor, use_container_width=True)
@@ -1521,7 +1607,7 @@ def main():
                 elif col == 'Contribute':
                     column_mapping[col] = '贡献度'
                 elif 'Market' in str(col) and 'Cap' in str(col):
-                    column_mapping[col] = '市值'
+                    column_mapping[col] = '市值 (USD Million)'
                 elif col == 'Weight':
                     column_mapping[col] = '权重(%)'
                 elif col == 'Sector':
@@ -1532,7 +1618,7 @@ def main():
             
             # 定义需要格式化的列类型
             percentage_columns = ['DTD', 'WTD', 'YTD', 'MTD']
-            decimal_columns = ['权重系数', '持股数量', '贡献度', '市值', '权重(%)']
+            decimal_columns = ['权重系数', '持股数量', '贡献度', '市值 (USD Million)', '权重(%)']
             
             # 格式化数值列 - 保留两位小数
             for col in display_holdings.columns:
@@ -1544,6 +1630,16 @@ def main():
                         # 权重列显示为百分比格式
                         display_holdings[col] = display_holdings[col].apply(
                             lambda x: f"{x:.2f}%" if pd.notna(x) else ""
+                        )
+                    elif col == '市值 (USD Million)':
+                        # 市值列四舍五入到整数
+                        display_holdings[col] = display_holdings[col].apply(
+                            lambda x: f"{round(x):,}" if pd.notna(x) else ""
+                        )
+                    elif col == '持股数量':
+                        # 持股数列保留四位小数
+                        display_holdings[col] = display_holdings[col].apply(
+                            lambda x: f"{x:.4f}" if pd.notna(x) else ""
                         )
                     else:
                         # 其他数值列显示为普通小数格式
@@ -1559,7 +1655,9 @@ def main():
                     # 转换为百分比格式并添加颜色
                     def format_percentage_with_color(x):
                         if pd.notna(x):
-                            formatted = f"{x:.2f}%"
+                            # 原始数据是小数格式，转换为百分比
+                            percentage_value = x * 100
+                            formatted = f"{percentage_value:.2f}%"
                             if x > 0:
                                 return f"🟢 {formatted}"  # 绿色表示上涨
                             elif x < 0:
@@ -1585,7 +1683,7 @@ def main():
                 return styled_df
             
             # 重新排序列，使其更合理
-            preferred_order = ['Ticker', '公司名称', '行业', '市值', '权重系数', '权重(%)', '持股数量', 'DTD', 'WTD', 'YTD', '贡献度']
+            preferred_order = ['Ticker', '公司名称', '行业', '市值 (USD Million)', '权重系数', '权重(%)', '持股数量', 'DTD', 'WTD', 'YTD', '贡献度']
             available_columns = [col for col in preferred_order if col in display_holdings.columns]
             remaining_columns = [col for col in display_holdings.columns if col not in available_columns]
             final_columns = available_columns + remaining_columns
@@ -1638,10 +1736,7 @@ def main():
                 
                 # 显示AGIX的DTD收益信息
                 if agix_dtd_return is not None and pd.notna(agix_dtd_return):
-                    if agix_dtd_return < 0:
-                        st.info(f"📊 行业贡献已考虑AGIX的DTD收益: {agix_dtd_return:.4f} ({agix_dtd_return*100:.2f}%) - 使用绝对值调整幅度，保持原有符号")
-                    else:
-                        st.info(f"📊 行业贡献已考虑AGIX的DTD收益: {agix_dtd_return:.4f} ({agix_dtd_return*100:.2f}%)")
+                    st.info(f"📊 行业贡献已标准化并乘以AGIX的DTD收益: {agix_dtd_return:.4f} ({agix_dtd_return*100:.2f}%) - 行业贡献总和等于AGIX的DTD收益")
                 else:
                     st.warning("⚠️ 无法获取AGIX的DTD收益数据，行业贡献未进行调整")
                 
