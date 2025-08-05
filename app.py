@@ -578,7 +578,7 @@ def plot_sector_market_cap(holdings):
         st.error(f"按市值的行业配置图表生成错误: {e}")
         return None
 
-def calculate_sector_contribution(holdings):
+def calculate_sector_contribution(holdings, agix_dtd_return=None):
     """计算行业贡献表格"""
     try:
         if holdings is None or 'Sector' not in holdings.columns:
@@ -600,14 +600,27 @@ def calculate_sector_contribution(holdings):
         # 按行业汇总贡献度
         sector_contribution = holdings.groupby('Sector')[contribution_col].sum()
         
+        # 如果提供了AGIX的DTD收益，则将贡献度乘以DTD收益的绝对值，保持原有符号
+        if agix_dtd_return is not None and pd.notna(agix_dtd_return):
+            # 使用DTD收益的绝对值来调整贡献度的幅度，但保持原有符号
+            sector_contribution = sector_contribution * abs(agix_dtd_return)
+        
+        # 将贡献度转换为百分比格式（乘以100）
+        sector_contribution = sector_contribution * 100
+        
         # 创建贡献表格
+        if agix_dtd_return is not None and pd.notna(agix_dtd_return):
+            column_name = '调整后贡献度总和'
+        else:
+            column_name = '贡献度总和'
+        
         contribution_df = pd.DataFrame({
             '行业': sector_contribution.index,
-            '贡献度总和': sector_contribution.values
+            column_name: sector_contribution.values
         })
         
         # 按贡献度排序
-        contribution_df = contribution_df.sort_values('贡献度总和', ascending=False)
+        contribution_df = contribution_df.sort_values(column_name, ascending=False)
         
         return contribution_df
     except Exception as e:
@@ -1615,9 +1628,42 @@ def main():
                 
                 # 行业贡献表格
                 st.subheader("DTD行业贡献")
-                contribution_df = calculate_sector_contribution(daily_holdings)
+                
+                # 获取AGIX的DTD收益
+                agix_dtd_return = None
+                if raw1_data is not None:
+                    agix_data = raw1_data[raw1_data['Name'] == 'ETNA']
+                    if not agix_data.empty and 'DTD' in agix_data.columns:
+                        agix_dtd_return = pd.to_numeric(agix_data['DTD'].iloc[0], errors='coerce')
+                
+                # 显示AGIX的DTD收益信息
+                if agix_dtd_return is not None and pd.notna(agix_dtd_return):
+                    if agix_dtd_return < 0:
+                        st.info(f"📊 行业贡献已考虑AGIX的DTD收益: {agix_dtd_return:.4f} ({agix_dtd_return*100:.2f}%) - 使用绝对值调整幅度，保持原有符号")
+                    else:
+                        st.info(f"📊 行业贡献已考虑AGIX的DTD收益: {agix_dtd_return:.4f} ({agix_dtd_return*100:.2f}%)")
+                else:
+                    st.warning("⚠️ 无法获取AGIX的DTD收益数据，行业贡献未进行调整")
+                
+                contribution_df = calculate_sector_contribution(daily_holdings, agix_dtd_return)
                 if contribution_df is not None:
-                    st.dataframe(contribution_df, use_container_width=True)
+                    # 为贡献度表格添加颜色样式和百分比格式
+                    def color_contribution_df(df):
+                        """为行业贡献表格添加颜色样式"""
+                        styled_df = df.copy()
+                        for col in df.columns:
+                            if '贡献度' in col:
+                                styled_df[col] = df[col].apply(lambda x: 'color: red' if x < 0 else 'color: green' if x > 0 else '')
+                            else:
+                                styled_df[col] = ''
+                        return styled_df
+                    
+                    # 应用颜色样式和百分比格式
+                    styled_contribution_df = contribution_df.style.format({
+                        '调整后贡献度总和': '{:.2f}%',
+                        '贡献度总和': '{:.2f}%'
+                    }).apply(color_contribution_df, axis=None)
+                    st.dataframe(styled_contribution_df, use_container_width=True)
                 else:
                     st.write("无法生成行业贡献表格")
         else:
