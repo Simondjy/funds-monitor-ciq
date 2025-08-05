@@ -801,15 +801,26 @@ def main():
             display_raw1 = raw1_data.copy()
             
             # 定义需要以百分比形式显示的列
-            percentage_columns = ['DTD', 'WTD', 'YTD', 'Return since 2024', 'Return since launch']
+            percentage_columns = ['DTD', 'WTD', 'MTD', 'YTD', 'Return since 2024', 'Return since launch']
             
-            # 应用百分比格式化
+            # 应用百分比格式化和颜色
             for col in percentage_columns:
                 if col in display_raw1.columns:
                     # 确保数据是数值类型
                     display_raw1[col] = pd.to_numeric(display_raw1[col], errors='coerce')
-                    # 转换为百分比格式
-                    display_raw1[col] = display_raw1[col].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "")
+                    # 转换为百分比格式并添加颜色
+                    def format_percentage_with_color(x):
+                        if pd.notna(x):
+                            formatted = f"{x:.2f}%"
+                            if x > 0:
+                                return f"🟢 {formatted}"  # 绿色表示上涨
+                            elif x < 0:
+                                return f"🔴 {formatted}"  # 红色表示下跌
+                            else:
+                                return formatted
+                        return ""
+                    
+                    display_raw1[col] = display_raw1[col].apply(format_percentage_with_color)
             
             # 确保所有列都是字符串类型，避免Arrow序列化问题
             for col in display_raw1.columns:
@@ -1461,7 +1472,7 @@ def main():
             
             # 过滤掉ticker是nan的行
             ticker_col = None
-            possible_ticker_cols = ['Ticker', 'Symbol', '股票代码', '代码']
+            possible_ticker_cols = ['Ticker']
             for col in display_holdings.columns:
                 if any(ticker in str(col) for ticker in possible_ticker_cols):
                     ticker_col = col
@@ -1485,13 +1496,100 @@ def main():
             if date_columns:
                 display_holdings = display_holdings.drop(columns=date_columns)
             
+            # 重命名通用列名
+            column_mapping = {}
+            for i, col in enumerate(display_holdings.columns):
+                if col == 'Unnamed: 1':
+                    column_mapping[col] = '公司名称'
+                elif col == 'W':
+                    column_mapping[col] = '权重系数'
+                elif col == 'shares':
+                    column_mapping[col] = '持股数量'
+                elif col == 'Contribute':
+                    column_mapping[col] = '贡献度'
+                elif 'Market' in str(col) and 'Cap' in str(col):
+                    column_mapping[col] = '市值'
+                elif col == 'Weight':
+                    column_mapping[col] = '权重(%)'
+                elif col == 'Sector':
+                    column_mapping[col] = '行业'
+            
+            # 应用列名映射
+            display_holdings = display_holdings.rename(columns=column_mapping)
+            
+            # 定义需要格式化的列类型
+            percentage_columns = ['DTD', 'WTD', 'YTD', 'MTD']
+            decimal_columns = ['权重系数', '持股数量', '贡献度', '市值', '权重(%)']
+            
+            # 格式化数值列 - 保留两位小数
+            for col in display_holdings.columns:
+                if col in decimal_columns:
+                    # 确保数据是数值类型
+                    display_holdings[col] = pd.to_numeric(display_holdings[col], errors='coerce')
+                    # 格式化为两位小数
+                    if col == '权重(%)':
+                        # 权重列显示为百分比格式
+                        display_holdings[col] = display_holdings[col].apply(
+                            lambda x: f"{x:.2f}%" if pd.notna(x) else ""
+                        )
+                    else:
+                        # 其他数值列显示为普通小数格式
+                        display_holdings[col] = display_holdings[col].apply(
+                            lambda x: f"{x:.2f}" if pd.notna(x) else ""
+                        )
+            
+            # 应用百分比格式化和颜色
+            for col in percentage_columns:
+                if col in display_holdings.columns:
+                    # 确保数据是数值类型
+                    display_holdings[col] = pd.to_numeric(display_holdings[col], errors='coerce')
+                    # 转换为百分比格式并添加颜色
+                    def format_percentage_with_color(x):
+                        if pd.notna(x):
+                            formatted = f"{x:.2f}%"
+                            if x > 0:
+                                return f"🟢 {formatted}"  # 绿色表示上涨
+                            elif x < 0:
+                                return f"🔴 {formatted}"  # 红色表示下跌
+                            else:
+                                return formatted
+                        return ""
+                    
+                    display_holdings[col] = display_holdings[col].apply(format_percentage_with_color)
+            
             # 确保所有列都是字符串类型
             for col in display_holdings.columns:
                 if display_holdings[col].dtype == 'object':
                     display_holdings[col] = display_holdings[col].astype(str)
             
-            st.dataframe(display_holdings, use_container_width=True)
+            # 使用Streamlit的dataframe显示，参考基金对比页面的格式
+            # 添加样式函数，类似基金对比页面的颜色处理
+            def style_holdings_dataframe(df):
+                """为持仓数据添加样式，参考基金对比页面的格式"""
+                styled_df = df.copy()
+                
+                
+                return styled_df
             
+            # 重新排序列，使其更合理
+            preferred_order = ['Ticker', '公司名称', '行业', '市值', '权重系数', '权重(%)', '持股数量', 'DTD', 'WTD', 'YTD', '贡献度']
+            available_columns = [col for col in preferred_order if col in display_holdings.columns]
+            remaining_columns = [col for col in display_holdings.columns if col not in available_columns]
+            final_columns = available_columns + remaining_columns
+            
+            # 重新排序
+            display_holdings = display_holdings[final_columns]
+            
+            # 应用样式
+            styled_holdings = style_holdings_dataframe(display_holdings)
+            
+            # 显示表格标题
+            st.subheader("📊 持仓详情表格")
+            
+            # 显示表格
+            st.dataframe(styled_holdings, use_container_width=True)
+            
+        
             # 如果有行业信息，显示行业配置图表
             if 'Sector' in daily_holdings.columns:
                 st.subheader("行业配置")
