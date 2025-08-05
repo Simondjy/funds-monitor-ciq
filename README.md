@@ -2,6 +2,12 @@
 
 一个基于Streamlit的AGIX基金监控应用，提供全面的基金表现分析、风险监控和持仓贡献度分析功能。
 
+## 🌐 在线访问
+
+**🎯 立即体验**: [https://funds-monitor-ciq-v3.streamlit.app/](https://funds-monitor-ciq-v3.streamlit.app/)
+
+> 💡 无需安装，直接在浏览器中访问即可使用所有功能！
+
 ## 🚀 功能特性
 
 ### 📊 概览页面
@@ -43,17 +49,22 @@
 
 ## 🛠️ 安装和运行
 
-### 1. 安装依赖
+### 🌐 在线使用（推荐）
+**无需安装，直接访问**: [https://funds-monitor-ciq-v3.streamlit.app/](https://funds-monitor-ciq-v3.streamlit.app/)
+
+### 💻 本地运行
+
+#### 1. 安装依赖
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. 运行应用
+#### 2. 运行应用
 ```bash
 streamlit run app.py
 ```
 
-### 3. 访问应用
+#### 3. 访问应用
 打开浏览器访问: `http://localhost:8501`
 
 ## 📁 数据文件结构
@@ -132,17 +143,25 @@ contribution = price_impact / total_portfolio_value
 
 ## 🚀 使用指南
 
+### 🌐 在线使用（推荐）
+1. **访问应用**: 打开 [https://funds-monitor-ciq-v3.streamlit.app/](https://funds-monitor-ciq-v3.streamlit.app/)
+2. **开始使用**: 无需安装，直接体验所有功能
+
+### 💻 本地使用
 1. **启动应用**: 运行 `streamlit run app.py`
-2. **概览页面**: 查看关键指标和AGIX表现总结
-3. **基金对比**: 选择要对比的基金，查看对比图表
-4. **贡献度分析**: 
+2. **访问应用**: 打开浏览器访问 `http://localhost:8501`
+
+### 📊 功能使用
+1. **概览页面**: 查看关键指标和AGIX表现总结
+2. **基金对比**: 选择要对比的基金，查看对比图表
+3. **贡献度分析**: 
    - 使用多选器选择要分析的股票
    - 查看累计收益率分析
    - 查看自2025年初的长期表现趋势
    - 分析持仓贡献度
-5. **收益率分析**: 查看多期间收益率和热力图
-6. **风险分析**: 查看风险指标和回撤分析
-7. **持仓详情**: 查看完整的持仓信息
+4. **收益率分析**: 查看多期间收益率和热力图
+5. **风险分析**: 查看风险指标和回撤分析
+6. **持仓详情**: 查看完整的持仓信息
 
 ## 🔄 数据更新
 
@@ -162,6 +181,7 @@ contribution = price_impact / total_portfolio_value
 
 ## 🆕 最新更新
 
+- ✅ **在线部署**: 应用已成功部署到Streamlit Cloud，支持在线访问
 - ✅ 修复了Capital IQ Ticker列显示为空的问题
 - ✅ 新增累计收益率分析功能
 - ✅ 新增自2025年初累计收益率对比图表
@@ -169,6 +189,7 @@ contribution = price_impact / total_portfolio_value
 - ✅ 优化了年化收益率计算，支持短期数据
 - ✅ 改进了错误处理和数据验证
 - ✅ 统一了表格颜色显示规则
+- ✅ 优化了资金流量列的红绿显示逻辑
 
 ## 🤝 贡献
 
