@@ -244,6 +244,66 @@ def calculate_cumulative_returns(prices, periods=[30, 90, 180, 252]):
         st.error(f"累计收益率计算错误: {e}")
         return {}
 
+def calculate_specific_period_returns(prices):
+    """计算特定期间的累计收益率（since 2024, since 2025）"""
+    try:
+        specific_returns = {}
+        
+        # 确保索引是日期类型并按时间排序
+        prices = prices.sort_index()
+        
+        # 计算since 2024的累计收益率
+        start_date_2024 = pd.Timestamp('2024-01-01')
+        available_dates = prices.index.sort_values()
+        
+        # 找到2024年或之后的第一天
+        start_idx_2024 = None
+        for date in available_dates:
+            if date >= start_date_2024:
+                start_idx_2024 = date
+                break
+        
+        if start_idx_2024 is not None:
+            prices_since_2024 = prices.loc[start_idx_2024:].copy()
+            if len(prices_since_2024) > 1:
+                base_prices_2024 = prices_since_2024.iloc[0]
+                current_prices = prices_since_2024.iloc[-1]
+                
+                for ticker in prices.columns:
+                    if ticker in base_prices_2024.index and ticker in current_prices.index:
+                        base_price = base_prices_2024[ticker]
+                        current_price = current_prices[ticker]
+                        if pd.notna(base_price) and base_price != 0:
+                            returns_2024 = (current_price - base_price) / base_price * 100
+                            specific_returns[f'{ticker}_since2024'] = returns_2024
+        
+        # 计算since 2025的累计收益率
+        start_date_2025 = pd.Timestamp('2025-01-01')
+        start_idx_2025 = None
+        for date in available_dates:
+            if date >= start_date_2025:
+                start_idx_2025 = date
+                break
+        
+        if start_idx_2025 is not None:
+            prices_since_2025 = prices.loc[start_idx_2025:].copy()
+            if len(prices_since_2025) > 1:
+                base_prices_2025 = prices_since_2025.iloc[0]
+                current_prices = prices_since_2025.iloc[-1]
+                
+                for ticker in prices.columns:
+                    if ticker in base_prices_2025.index and ticker in current_prices.index:
+                        base_price = base_prices_2025[ticker]
+                        current_price = current_prices[ticker]
+                        if pd.notna(base_price) and base_price != 0:
+                            returns_2025 = (current_price - base_price) / base_price * 100
+                            specific_returns[f'{ticker}_since2025'] = returns_2025
+        
+        return specific_returns
+    except Exception as e:
+        st.error(f"特定期间收益率计算错误: {e}")
+        return {}
+
 def plot_cumulative_returns(prices, selected_tickers=None, periods=[30, 90]):
     """绘制累计收益率图表"""
     try:
@@ -569,12 +629,13 @@ def main():
     # 侧边栏
     st.sidebar.header("📈 监控设置")
     
-    # 时间范围选择
-    date_range = st.sidebar.selectbox(
-        "选择时间范围",
-        ["最近1天", "最近5天", "最近30天", "最近90天", "最近1年"],
-        index=0
-    )
+    # 占位符 - 未来可添加监控设置功能
+    st.sidebar.info("监控设置功能正在开发中...")
+    st.sidebar.write("未来将支持：")
+    st.sidebar.write("• 自定义时间范围")
+    st.sidebar.write("• 风险预警设置")
+    st.sidebar.write("• 收益率目标设置")
+    st.sidebar.write("• 自动报告生成")
     
 
     
@@ -583,7 +644,7 @@ def main():
         "📊 概览", 
         "📊 基金对比",
         "🎯 贡献度分析", 
-        "📈 收益率分析", 
+        "📈 持仓收益率分析", 
         "⚠️ 风险分析", 
         "📋 持仓详情"
     ])
@@ -894,23 +955,20 @@ def main():
         else:
             st.warning("无法加载详细基金对比数据")
     
-    # 收益率分析标签页
+    # 持仓收益率分析标签页
     with tab4:
-        st.header("📈 收益率分析")
+        st.header("📈 持仓收益率分析")
         
         try:
             # 计算不同期间的收益率
             returns = calculate_returns(filled_pri)
             
-            # 显示收益率表格
+            # 准备收益率数据用于热力图
             returns_df = pd.DataFrame(returns).T
             returns_df = returns_df * 100  # 转换为百分比
             
             # 确保数据类型兼容
             returns_df = returns_df.astype(float)
-            
-            st.subheader("各期间收益率 (%)")
-            st.dataframe(returns_df.style.format("{:.2f}%"), use_container_width=True)
             
             # 收益率热力图
             st.subheader("收益率热力图")
@@ -920,8 +978,137 @@ def main():
                 title="Returns Heatmap by Period"
             )
             st.plotly_chart(fig, use_container_width=True)
+            
+            # 累计收益率分析
+            st.subheader("📈 累计收益率分析")
+            
+            # 获取所有可用的Ticker
+            available_tickers = list(filled_pri.columns)
+            
+            # 计算30天收益率来获取Top 10 Holdings
+            cumulative_returns_30d = calculate_cumulative_returns(filled_pri, [30])
+            if '30d' in cumulative_returns_30d:
+                top_10_holdings = cumulative_returns_30d['30d'].nlargest(10).index.tolist()
+            else:
+                top_10_holdings = available_tickers[:10]
+            
+            # 创建多选器
+            selected_tickers = st.multiselect(
+                "选择要显示的股票代码:",
+                options=available_tickers,
+                default=top_10_holdings,
+                help="默认显示30天收益率最高的前10个持仓"
+            )
+            
+            # 绘制累计收益率图表
+            if selected_tickers:
+                cum_returns_fig = plot_cumulative_returns(filled_pri, selected_tickers, [30, 90])
+                st.plotly_chart(cum_returns_fig, use_container_width=True)
+            else:
+                st.warning("请至少选择一个股票代码")
+            
+            # 累计收益率详细数据表格
+            st.subheader("📊 累计收益率详细数据")
+            
+            # 计算累计收益率数据 - 添加更多期间
+            cumulative_returns_data = calculate_cumulative_returns(filled_pri, [1, 5, 30, 90])
+            
+            if cumulative_returns_data:
+                # 创建累计收益率表格
+                returns_df_cum = pd.DataFrame(cumulative_returns_data)
+                
+                # 计算特定期间的收益率
+                specific_returns = calculate_specific_period_returns(filled_pri)
+                
+                # 添加since2024和since2025数据
+                if specific_returns:
+                    # 将特定期间数据转换为DataFrame格式
+                    since2024_data = {}
+                    since2025_data = {}
+                    
+                    for key, value in specific_returns.items():
+                        if key.endswith('_since2024'):
+                            ticker = key.replace('_since2024', '')
+                            since2024_data[ticker] = value
+                        elif key.endswith('_since2025'):
+                            ticker = key.replace('_since2025', '')
+                            since2025_data[ticker] = value
+                    
+                    # 添加到主表格
+                    if since2024_data:
+                        returns_df_cum['since2024'] = pd.Series(since2024_data)
+                    if since2025_data:
+                        returns_df_cum['since2025'] = pd.Series(since2025_data)
+                
+                # 添加持仓权重信息
+                if len(shares.columns) > 1:
+                    shares_col = shares.iloc[:, 1]  # 第2列
+                else:
+                    shares_col = shares.iloc[:, 0]  # 如果只有1列，使用第1列
+                
+                yesterday_value = filled_pri.iloc[1] * shares_col
+                total_value = yesterday_value.sum()
+                weight = yesterday_value / total_value * 100
+                
+                returns_df_cum['Weight(%)'] = weight
+                
+                # 重新排序列 - 按时间顺序和重要性排序
+                column_order = ['1d', '5d', '30d', '90d', 'since2024', 'since2025', 'Weight(%)']
+                available_columns = [col for col in column_order if col in returns_df_cum.columns]
+                returns_df_cum = returns_df_cum[available_columns]
+                
+                # 格式化显示 - 只对收益率列应用颜色，权重列保持白色
+                def color_returns_only(df):
+                    """只对收益率列应用颜色，权重列保持白色"""
+                    styled_df = df.copy()
+                    for col in df.columns:
+                        if col in ['1d', '5d', '30d', '90d', 'since2024', 'since2025']:
+                            styled_df[col] = df[col].apply(lambda x: 'color: red' if x < 0 else 'color: green' if x > 0 else '')
+                        else:
+                            styled_df[col] = ''  # 权重列保持白色
+                    return styled_df
+                
+                # 准备格式化字典
+                format_dict = {}
+                for col in returns_df_cum.columns:
+                    if col == 'Weight(%)':
+                        format_dict[col] = '{:.2f}%'
+                    else:
+                        format_dict[col] = '{:.2f}%'
+                
+                # 显示表格
+                st.dataframe(returns_df_cum.style.format(format_dict).apply(color_returns_only, axis=None), use_container_width=True)
+            
+            # 自2025年初累计收益率对比图
+            st.subheader("📈 自2025年初累计收益率对比")
+            
+            # 获取所有可用的Ticker
+            available_tickers_2025 = list(filled_pri.columns)
+            
+            # 计算30天收益率来获取Top 10 Holdings（用于默认选择）
+            cumulative_returns_30d_for_2025 = calculate_cumulative_returns(filled_pri, [30])
+            if '30d' in cumulative_returns_30d_for_2025:
+                top_10_holdings_2025 = cumulative_returns_30d_for_2025['30d'].nlargest(10).index.tolist()
+            else:
+                top_10_holdings_2025 = available_tickers_2025[:10]
+            
+            # 创建独立的多选器
+            selected_tickers_2025 = st.multiselect(
+                "选择要显示的股票代码 (累计收益率对比):",
+                options=available_tickers_2025,
+                default=top_10_holdings_2025,
+                help="默认显示30天收益率最高的前10个持仓"
+            )
+            
+            # 绘制累计收益率对比图
+            if selected_tickers_2025:
+                cum_returns_2025_fig = plot_cumulative_returns_since_2025(filled_pri, selected_tickers_2025)
+                st.plotly_chart(cum_returns_2025_fig, use_container_width=True)
+            else:
+                st.warning("请至少选择一个股票代码")
+                
         except Exception as e:
-            st.error(f"收益率分析错误: {e}")
+            st.error(f"持仓收益率分析错误: {e}")
     
     # 风险分析标签页
     with tab5:
@@ -1039,102 +1226,6 @@ def main():
                     else:
                         st.write("**📉 跌幅最大的股票:**")
                         st.write("今日无下跌股票")
-                
-                # 累计收益率图表
-                st.subheader("📈 累计收益率分析")
-                
-                # 获取所有可用的Ticker
-                available_tickers = list(filled_pri.columns)
-                
-                # 计算30天收益率来获取Top 10 Holdings
-                cumulative_returns_30d = calculate_cumulative_returns(filled_pri, [30])
-                if '30d' in cumulative_returns_30d:
-                    top_10_holdings = cumulative_returns_30d['30d'].nlargest(10).index.tolist()
-                else:
-                    top_10_holdings = available_tickers[:10]
-                
-                # 创建多选器
-                selected_tickers = st.multiselect(
-                    "选择要显示的股票代码:",
-                    options=available_tickers,
-                    default=top_10_holdings,
-                    help="默认显示30天收益率最高的前10个持仓"
-                )
-                
-                # 绘制累计收益率图表
-                if selected_tickers:
-                    cum_returns_fig = plot_cumulative_returns(filled_pri, selected_tickers, [30, 90])
-                    st.plotly_chart(cum_returns_fig, use_container_width=True)
-                else:
-                    st.warning("请至少选择一个股票代码")
-                
-                # 累计收益率详细数据表格
-                st.subheader("📊 累计收益率详细数据")
-                
-                # 计算累计收益率数据
-                cumulative_returns_data = calculate_cumulative_returns(filled_pri, [30, 90])
-                
-                if cumulative_returns_data:
-                    # 创建累计收益率表格
-                    returns_df = pd.DataFrame(cumulative_returns_data)
-                    
-                    # 添加持仓权重信息
-                    if len(shares.columns) > 1:
-                        shares_col = shares.iloc[:, 1]  # 第2列
-                    else:
-                        shares_col = shares.iloc[:, 0]  # 如果只有1列，使用第1列
-                    
-                    yesterday_value = filled_pri.iloc[1] * shares_col
-                    total_value = yesterday_value.sum()
-                    weight = yesterday_value / total_value * 100
-                    
-                    returns_df['Weight(%)'] = weight
-                    
-                    # 格式化显示 - 只对收益率列应用颜色，权重列保持白色
-                    def color_returns_only(df):
-                        """只对收益率列应用颜色，权重列保持白色"""
-                        styled_df = df.copy()
-                        for col in df.columns:
-                            if col in ['30d', '90d']:
-                                styled_df[col] = df[col].apply(lambda x: 'color: red' if x < 0 else 'color: green' if x > 0 else '')
-                            else:
-                                styled_df[col] = ''  # 权重列保持白色
-                        return styled_df
-                    
-                    # 显示表格
-                    st.dataframe(returns_df.style.format({
-                        '30d': '{:.2f}%',
-                        '90d': '{:.2f}%',
-                        'Weight(%)': '{:.2f}%'
-                    }).apply(color_returns_only, axis=None), use_container_width=True)
-                
-                # 自2025年初累计收益率对比图
-                st.subheader("📈 自2025年初累计收益率对比")
-                
-                # 获取所有可用的Ticker
-                available_tickers_2025 = list(filled_pri.columns)
-                
-                # 计算30天收益率来获取Top 10 Holdings（用于默认选择）
-                cumulative_returns_30d_for_2025 = calculate_cumulative_returns(filled_pri, [30])
-                if '30d' in cumulative_returns_30d_for_2025:
-                    top_10_holdings_2025 = cumulative_returns_30d_for_2025['30d'].nlargest(10).index.tolist()
-                else:
-                    top_10_holdings_2025 = available_tickers_2025[:10]
-                
-                # 创建独立的多选器
-                selected_tickers_2025 = st.multiselect(
-                    "选择要显示的股票代码 (累计收益率对比):",
-                    options=available_tickers_2025,
-                    default=top_10_holdings_2025,
-                    help="默认显示30天收益率最高的前10个持仓"
-                )
-                
-                # 绘制累计收益率对比图
-                if selected_tickers_2025:
-                    cum_returns_2025_fig = plot_cumulative_returns_since_2025(filled_pri, selected_tickers_2025)
-                    st.plotly_chart(cum_returns_2025_fig, use_container_width=True)
-                else:
-                    st.warning("请至少选择一个股票代码")
                 
                 # 贡献度图表
                 st.subheader("持仓贡献度分析")
