@@ -138,12 +138,6 @@ def load_data():
             if col in numeric_columns and daily_monitor[col].dtype == 'object':
                 daily_monitor[col] = pd.to_numeric(daily_monitor[col], errors='coerce')
         
-        # 加载持仓信息
-        holdings = pd.read_excel(
-            "ciq reference/data/Shares.xlsx",
-            sheet_name="08_05_2025_agix_holdings",
-            skiprows=1
-        )
         
         # 加载每日监控的holdings表数据 - A1:O47范围
         try:
@@ -159,7 +153,7 @@ def load_data():
             st.warning(f"无法加载每日监控holdings表数据: {e}")
             daily_holdings = None
         
-        return filled_pri, shares, daily_monitor, holdings, raw1_data, daily_holdings
+        return filled_pri, shares, daily_monitor, raw1_data, daily_holdings
     except Exception as e:
         st.error(f"数据加载错误: {e}")
         return None, None, None, None, None, None
@@ -641,7 +635,7 @@ def main():
     
     # 加载数据
     with st.spinner("正在加载数据..."):
-        filled_pri, shares, daily_monitor, holdings, raw1_data, daily_holdings = load_data()
+        filled_pri, shares, daily_monitor, raw1_data, daily_holdings = load_data()
     
     if filled_pri is None:
         st.error("无法加载数据，请检查文件路径")
