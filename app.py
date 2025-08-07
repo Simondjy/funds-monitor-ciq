@@ -141,7 +141,7 @@ def load_data():
         # 加载持仓信息
         holdings = pd.read_excel(
             "ciq reference/data/Shares.xlsx",
-            sheet_name="07_30_2025_agix_holdings",
+            sheet_name="08_05_2025_agix_holdings",
             skiprows=1
         )
         
