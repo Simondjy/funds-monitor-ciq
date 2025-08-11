@@ -165,10 +165,121 @@ contribution = price_impact / total_portfolio_value
 
 ## 🔄 数据更新
 
-应用会自动读取Excel文件中的数据，如需更新数据：
-1. 替换相应的Excel文件
-2. 刷新浏览器页面
-3. 应用会自动重新加载最新数据
+应用会自动读取Excel文件中的数据，以下是详细的数据更新流程：
+
+### 📅 每日更新流程
+
+#### 1. 更新每日数据监控文件
+- **raw1 sheet**: 更新上个交易日，n-1日期，week，month等，记得保存文件
+
+
+#### 2. 更新StockPriceValue文件
+- **插入新行**: 在文件最上面插入一行新的日期
+- **公式填充**: 拉动下面所有公式进行填充
+- **重要**: 必须保存文件，否则代码无法读取新数据
+
+#### 3. 更新Shares文件
+- **更改日期刷新**: 更新标黄日期，记得保存文件
+
+## 🆙 项目接管指南 - 成为新的Admin
+
+如果您需要接管这个项目并成为新的管理员，请按照以下步骤操作：
+
+### 📥 第一步：下载项目代码
+
+#### 方法1：从GitHub下载（推荐）
+1. 访问 [https://github.com/Simondjy/funds-monitor-ciq](https://github.com/Simondjy/funds-monitor-ciq)
+2. 点击绿色的 "Code" 按钮
+3. 选择 "Download ZIP"
+4. 解压到您的本地文件夹
+
+#### 方法2：使用Git克隆（如果您熟悉Git）
+```bash
+git clone https://github.com/Simondjy/funds-monitor-ciq.git
+cd funds-monitor-ciq
+```
+
+### 🔐 第二步：创建自己的GitHub仓库
+
+1. 登录您的GitHub账户
+2. 点击右上角 "+" 号，选择 "New repository"
+3. 输入仓库名称（例如：`my-funds-monitor`）
+4. 选择 "Public" 或 "Private"
+5. 不要勾选 "Add a README file"（因为我们已经有了）
+6. 点击 "Create repository"
+
+### 📤 第三步：上传代码到您的仓库
+
+#### 方法1：使用Git（推荐）
+```bash
+# 在项目文件夹中初始化Git
+git init
+git add .
+git commit -m "Initial commit: AGIX Fund Monitor"
+
+# 添加您的远程仓库
+git remote add origin https://github.com/您的用户名/您的仓库名.git
+git branch -M main
+git push -u origin main
+```
+
+#### 方法2：直接上传文件
+1. 在您的GitHub仓库页面，点击 "uploading an existing file"
+2. 拖拽所有项目文件到上传区域
+3. 添加提交信息，点击 "Commit changes"
+
+### ☁️ 第四步：创建自己的Streamlit Cloud应用
+
+1. 访问 [https://share.streamlit.io/](https://share.streamlit.io/)
+2. 使用GitHub账户登录
+3. 点击 "New app"
+4. 填写应用信息：
+   - **Repository**: 选择您刚创建的仓库
+   - **Branch**: 选择 `main`
+   - **Main file path**: 输入 `app.py`
+   - **App URL**: 输入您想要的URL（例如：`my-funds-monitor`）
+5. 点击 "Deploy!"
+
+### 🔄 第五步：设置自动更新
+
+#### 每日数据更新流程：
+1. **准备数据文件**：
+   - 更新 `ciq reference/data/` 文件夹中的Excel文件
+   - 确保文件名和格式与原始项目一致
+
+2. **上传到GitHub**：
+   ```bash
+   git add .
+   git commit -m "Update daily data: $(date)"
+   git push origin main
+   ```
+
+3. **Streamlit自动部署**：
+   - Streamlit Cloud会自动检测到代码更新
+   - 应用会在几分钟内自动重新部署
+   - 新数据会立即生效
+
+### 📋 第六步：自定义配置
+
+
+#### 修改数据文件路径：
+如果需要，可以调整数据文件的路径结构：
+```python
+# 在app.py中搜索这些路径并修改
+data_path = "ciq reference/data/"
+```
+
+5. **测试部署**：在正式使用前，先在测试环境中验证功能
+
+
+### 📞 技术支持
+
+如果在接管过程中遇到问题：
+1. 查看Streamlit官方文档
+2. 检查GitHub Issues页面
+3. 联系原项目维护者
+
+---
 
 ## 📝 注意事项
 
@@ -190,6 +301,7 @@ contribution = price_impact / total_portfolio_value
 - ✅ 改进了错误处理和数据验证
 - ✅ 统一了表格颜色显示规则
 - ✅ 优化了资金流量列的红绿显示逻辑
+- ✅ **新增项目接管指南**: 详细说明如何成为新的Admin并创建自己的应用
 
 ## 🤝 贡献
 
