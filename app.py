@@ -153,7 +153,36 @@ def load_data():
             st.warning(f"无法加载每日监控holdings表数据: {e}")
             daily_holdings = None
         
-        return filled_pri, shares, daily_monitor, raw1_data, daily_holdings
+        # 加载FundsValue数据
+        try:
+            funds_value = pd.read_excel(
+                "auto_update/data/FundsValue.xlsx",
+                sheet_name="Price",
+                header=0,
+                index_col=0,
+                parse_dates=True
+            )
+            
+            # 确保索引是日期类型
+            if funds_value.index.name == 'Date':
+                funds_value.index = pd.to_datetime(funds_value.index, errors='coerce')
+            
+            # 确保所有数值列都是数值类型
+            for col in funds_value.columns:
+                if funds_value[col].dtype == 'object':
+                    funds_value[col] = pd.to_numeric(funds_value[col], errors='coerce')
+            
+            # 处理异常数据：将0、负数、NaN等异常值替换为NaN
+            funds_value = funds_value.replace([0, -np.inf, np.inf], np.nan)
+            
+            # 按日期排序
+            funds_value = funds_value.sort_index()
+            
+        except Exception as e:
+            st.warning(f"无法加载FundsValue数据: {e}")
+            funds_value = None
+        
+        return filled_pri, shares, daily_monitor, raw1_data, daily_holdings, funds_value
     except Exception as e:
         st.error(f"数据加载错误: {e}")
         return None, None, None, None, None, None
@@ -483,6 +512,155 @@ def plot_cumulative_returns_since_2025(prices, selected_tickers=None):
         return go.Figure()
 
 
+def plot_funds_cumulative_returns_since_2025(funds_value_data, selected_funds=None):
+    """绘制基于FundsValue数据的自2025年初累计收益率对比图"""
+    try:
+        if funds_value_data is None or funds_value_data.empty:
+            st.warning("FundsValue数据为空")
+            return go.Figure()
+        
+        # 确保索引是日期类型并按时间排序
+        funds_value_data = funds_value_data.sort_index()
+        
+        # 找到2025年1月1日或之后的第一天
+        start_date = pd.Timestamp('2025-01-01')
+        available_dates = funds_value_data.index.sort_values()
+        
+        # 找到2025年或之后的第一天
+        start_idx = None
+        for date in available_dates:
+            if date >= start_date:
+                start_idx = date
+                break
+        
+        if start_idx is None:
+            st.warning("没有找到2025年的数据，使用最新数据")
+            # 如果没有2025年数据，使用最近30天的数据
+            start_idx = available_dates[-30] if len(available_dates) >= 30 else available_dates[0]
+        
+        # 获取从起始日期开始的数据
+        funds_since_start = funds_value_data.loc[start_idx:].copy()
+        
+        if len(funds_since_start) < 2:
+            st.warning("数据不足")
+            return go.Figure()
+        
+        # 如果没有选择基金，使用所有可用的基金
+        if selected_funds is None or len(selected_funds) == 0:
+            available_funds = list(funds_value_data.columns)
+            selected_funds = available_funds[:10]  # 默认显示前10个
+        
+        # 过滤出用户选择的基金
+        available_funds = [fund for fund in selected_funds if fund in funds_value_data.columns]
+        
+        if not available_funds:
+            st.warning("所选基金在数据中不存在")
+            return go.Figure()
+        
+        # 计算累计收益率（以起始日期为基准）
+        # 直接使用起始日期作为基准，而不是iloc[0]
+        base_prices = funds_since_start.loc[start_idx]
+        cumulative_returns = {}
+        
+        for fund in available_funds:
+            if fund in funds_since_start.columns:
+                price_series = funds_since_start[fund]
+                base_price = base_prices[fund]
+                
+                # 过滤掉异常数据：价格为0、NaN或负数的数据点
+                valid_prices = price_series[(price_series > 0) & pd.notna(price_series)]
+                
+                if len(valid_prices) > 1 and pd.notna(base_price) and base_price > 0:
+                    # 计算每日累计收益率，只使用有效价格数据
+                    returns = (valid_prices - base_price) / base_price * 100
+                    cumulative_returns[fund] = returns
+        
+        if not cumulative_returns:
+            st.warning("无法计算累计收益率")
+            return go.Figure()
+        
+        # 创建图表
+        fig = go.Figure()
+        
+        # 颜色列表
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', 
+                 '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+        
+        for i, (fund, returns) in enumerate(cumulative_returns.items()):
+            # 移除NaN值，但保留有效的数据点
+            valid_data = returns.dropna()
+            if len(valid_data) > 1:  # 至少需要2个点才能画线
+                # 为AGIX设置特殊颜色和样式
+                if 'AGIX' in fund:
+                    line_color = '#ff6b6b'  # 红色突出显示AGIX
+                    line_width = 3
+                    line_dash = 'solid'
+                else:
+                    line_color = colors[i % len(colors)]
+                    line_width = 2
+                    line_dash = 'solid'
+                
+                fig.add_trace(go.Scatter(
+                    x=valid_data.index,
+                    y=valid_data.values,
+                    mode='lines',
+                    name=fund,
+                    line=dict(color=line_color, width=line_width, dash=line_dash),
+                    hovertemplate=f'{fund}<br>日期: %{{x}}<br>累计收益率: %{{y:.2f}}%<extra></extra>'
+                ))
+        
+        # 设置图表标题
+        if start_idx >= pd.Timestamp('2025-01-01'):
+            title = "自2025年初累计收益率对比 (基于FundsValue数据)"
+        else:
+            title = f"自{start_idx.strftime('%Y-%m-%d')}累计收益率对比 (基于FundsValue数据)"
+        
+        fig.update_layout(
+            title=title,
+            xaxis_title="日期",
+            yaxis_title="累计收益率 (%)",
+            height=500,
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            hovermode='x unified',
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white')
+        )
+        
+        # 更新x轴样式
+        fig.update_xaxes(
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='rgba(128,128,128,0.2)',
+            zeroline=False
+        )
+        
+        # 更新y轴样式
+        fig.update_yaxes(
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='rgba(128,128,128,0.2)',
+            zeroline=True,
+            zerolinecolor='rgba(128,128,128,0.5)',
+            zerolinewidth=1
+        )
+        
+        # 添加零线
+        fig.add_hline(y=0, line_dash="dash", line_color="rgba(128,128,128,0.8)", line_width=1)
+        
+        return fig
+    except Exception as e:
+        st.error(f"FundsValue累计收益率对比图生成错误: {e}")
+        return go.Figure()
+
+
 def plot_contribution_analysis(contribution, top_n=10):
     """绘制贡献度分析图表"""
     try:
@@ -635,7 +813,7 @@ def main():
     
     # 加载数据
     with st.spinner("正在加载数据..."):
-        filled_pri, shares, daily_monitor, raw1_data, daily_holdings = load_data()
+        filled_pri, shares, daily_monitor, raw1_data, daily_holdings, funds_value = load_data()
     
     if filled_pri is None:
         st.error("无法加载数据，请检查文件路径")
@@ -874,10 +1052,26 @@ def main():
             fund_mapping = dict(zip(raw1_data['Ticker.1'], raw1_data['Name']))
             available_tickers = raw1_data['Ticker.1'].tolist()
             
+            # 设置默认选择的基金/指数
+            default_tickers = []
+            target_funds = ['AGIX', 'S&P 500', 'QQQ', 'DowJones']
+            
+            # 查找目标基金在可用ticker中的对应项
+            for target in target_funds:
+                for ticker in available_tickers:
+                    if target in ticker or target in fund_mapping.get(ticker, ''):
+                        default_tickers.append(ticker)
+                        break
+            
+            # 如果没有找到目标基金，则使用前几个可用的
+            if not default_tickers:
+                default_tickers = available_tickers[:4] if len(available_tickers) >= 4 else available_tickers
+            
             selected_tickers = st.multiselect(
                 "选择要对比的指数/基金:",
                 available_tickers,
-                default=available_tickers  # 默认选择所有基金
+                default=default_tickers,
+                help="默认选择AGIX、S&P 500、QQQ和DowJones等主要指数"
             )
             
             # 将选中的ticker转换为对应的基金名称用于数据过滤
@@ -974,6 +1168,44 @@ def main():
                 fig.add_hline(y=0, line_dash="dash", line_color="rgba(128,128,128,0.8)", line_width=1)
                 
                 st.plotly_chart(fig, use_container_width=True)
+        
+        # 第二部分：累计收益率对比图（基于FundsValue数据）
+        if funds_value is not None:
+            st.subheader("📈 累计收益率对比图")
+            st.write("**基于FundsValue数据的自2025年初累计收益率对比:**")
+            
+            # 获取所有可用的基金代码
+            available_funds = list(funds_value.columns)
+            
+            # 设置默认选择的基金
+            default_funds = []
+            target_funds = ['NasdaqGM:AGIX', 'NasdaqGM:QQQ']
+            
+            # 查找目标基金在可用基金中的对应项
+            for target in target_funds:
+                if target in available_funds:
+                    default_funds.append(target)
+            
+            # 如果没有找到目标基金，则使用前几个可用的
+            if not default_funds:
+                default_funds = available_funds[:2] if len(available_funds) >= 2 else available_funds
+            
+            # 创建多选器，用于选择要与AGIX对比的基金
+            selected_funds_for_comparison = st.multiselect(
+                "选择要与AGIX对比的基金:",
+                options=available_funds,
+                default=default_funds,
+                help="默认选择Nasdaq: AGIX和Nasdaq QQQ进行对比"
+            )
+            
+            # 绘制累计收益率对比图
+            if selected_funds_for_comparison:
+                cum_returns_funds_fig = plot_funds_cumulative_returns_since_2025(funds_value, selected_funds_for_comparison)
+                st.plotly_chart(cum_returns_funds_fig, use_container_width=True)
+            else:
+                st.warning("请至少选择一个基金进行对比")
+        else:
+            st.warning("无法加载FundsValue数据，无法显示累计收益率对比图")
          
         # 第三部分：详细基金对比数据
         if daily_monitor is not None:
