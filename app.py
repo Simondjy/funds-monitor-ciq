@@ -156,7 +156,7 @@ def load_data():
         # 加载FundsValue数据
         try:
             funds_value = pd.read_excel(
-                "auto_update/data/FundsValue.xlsx",
+                "ciq reference/data/FundsValue.xlsx",
                 sheet_name="Price",
                 header=0,
                 index_col=0,
