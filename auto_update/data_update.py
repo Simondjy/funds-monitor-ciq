@@ -22,6 +22,7 @@ import win32com.client
 import time
 import subprocess
 import os
+from agix_util import get_agix_shares_outstanding
 
 # 导入公共日期处理模块
 from date_utils import (
@@ -397,8 +398,9 @@ def update_shares_sheet_with_holdings_data(holdings_csv_path, dates):
             print(f"已更新E3为: {dates['n-1']}")
             
             # 更新P2单元格
-            shares_worksheet.Range("P2").Value = "1700002"
-            print("已更新P2为: 1700002")
+            shares_outstanding = get_agix_shares_outstanding()  
+            shares_worksheet.Range("P2").Value = shares_outstanding
+            print(f"已更新P2为: {shares_outstanding}")
             
             print("✅ shares工作表更新完成")
             

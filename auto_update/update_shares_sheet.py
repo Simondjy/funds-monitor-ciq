@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 import pytz
 import win32com.client
 import time
+from agix_util import get_agix_shares_outstanding
 
 # 导入公共日期处理模块
 from date_utils import calculate_n_and_n_minus_1
@@ -317,9 +318,10 @@ def update_shares_sheet_with_holdings_data(holdings_csv_path, dates):
             print(f"已更新E2为: {dates['n']}")
             print(f"已更新E3为: {dates['n-1']}")
             
-            # 更新P2单元格
-            shares_worksheet.Range("P2").Value = "1700002"
-            print("已更新P2为: 1700002")
+            # 更新P2单元格 (Shares Outstanding)
+            shares_outstanding = get_agix_shares_outstanding()  
+            shares_worksheet.Range("P2").Value = shares_outstanding
+            print(f"已更新P2为: {shares_outstanding}")
             
             print("✅ shares工作表更新完成")
             
